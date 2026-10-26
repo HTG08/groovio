@@ -1,20 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
+
 import {
   Disc3,
   ArrowRight,
   Plus,
-  Users,
   Radio,
   ListMusic,
   MessageCircle,
   ArrowLeft,
-  Copy,
-  Check,
 } from "lucide-react";
+
+import RoomPage from "./pages/RoomPage";
 import "./App.css";
 
-const API = "http://localhost:8888/api/rooms";
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:8888";
+
+const API = `${SERVER_URL}/api/rooms`;
+
+const SESSION_KEYS = [
+  "groovioUserId",
+  "groovioRoomCode",
+  "groovioName",
+  "groovioToken",
+];
+
+function clearSavedSession() {
+  SESSION_KEYS.forEach((key) => {
+    sessionStorage.removeItem(key);
+  });
+}
 
 export default function App() {
   const [mode, setMode] = useState(null);
@@ -22,50 +37,124 @@ export default function App() {
   const [roomName, setRoomName] = useState("");
   const [code, setCode] = useState("");
   const [room, setRoom] = useState(null);
+
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+
+  // Restore a previously saved room session.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const savedRoomCode = sessionStorage.getItem("groovioRoomCode");
+
+      const savedUserId = sessionStorage.getItem("groovioUserId");
+
+      const savedName = sessionStorage.getItem("groovioName");
+
+      const savedToken = sessionStorage.getItem("groovioToken");
+
+      if (!savedRoomCode || !savedUserId || !savedName || !savedToken) {
+        clearSavedSession();
+
+        if (!cancelled) {
+          setRestoring(false);
+        }
+
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${API}/${savedRoomCode}`);
+
+        if (cancelled) return;
+
+        const savedRoom = response.data.room;
+
+        if (!response.data.success || savedRoom.code !== savedRoomCode) {
+          throw new Error("Could not restore the room.");
+        }
+
+        // The public endpoint deliberately hides
+        // member IDs and host ID.
+        // The next step will authenticate this
+        // saved token through Socket.IO.
+        setName(savedName);
+        setRoom(savedRoom);
+        setMode(null);
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error("Could not restore room:", err);
+
+        clearSavedSession();
+
+        setRoom(null);
+        setMode(null);
+        setName("");
+      } finally {
+        if (!cancelled) {
+          setRestoring(false);
+        }
+      }
+    }
+
+    restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function submitRoom(e) {
     e.preventDefault();
+
+    if (loading) return;
+
     setError("");
     setLoading(true);
 
     try {
-      const response =
-        mode === "create"
-          ? await axios.post(`${API}/create`, {
-              name: roomName,
-              hostName: name,
-            })
-          : await axios.post(`${API}/join`, {
-              code: code.trim().toUpperCase(),
-              userName: name,
-            });
+      let response;
 
-      setRoom(response.data.room);
+      if (mode === "create") {
+        response = await axios.post(`${API}/create`, {
+          name: roomName.trim(),
+          hostName: name.trim(),
+        });
+      } else {
+        response = await axios.post(`${API}/join`, {
+          code: code.trim().toUpperCase(),
+          userName: name.trim(),
+        });
+      }
 
-      sessionStorage.setItem("groovioUserId", response.data.userId);
+      const data = response.data;
 
-      sessionStorage.setItem("groovioRoomCode", response.data.room.code);
+      if (!data.success || !data.room?.code || !data.userId || !data.token) {
+        throw new Error(data.message || "Could not start your room session.");
+      }
 
-      sessionStorage.setItem("groovioName", name);
+      // Store the signed room-session token.
+      sessionStorage.setItem("groovioToken", data.token);
+
+      sessionStorage.setItem("groovioUserId", data.userId);
+
+      sessionStorage.setItem("groovioRoomCode", data.room.code);
+
+      sessionStorage.setItem("groovioName", name.trim());
+
+      setRoom(data.room);
+      setMode(null);
     } catch (err) {
       setError(
-        err.response?.data?.message || "Unable to connect. Please try again.",
+        err.response?.data?.message ||
+          err.message ||
+          "Unable to connect. Please try again.",
       );
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function copyCode() {
-    try {
-      await navigator.clipboard.writeText(room.code);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setError("Couldn't copy. Please copy the code manually.");
     }
   }
 
@@ -76,15 +165,30 @@ export default function App() {
     setRoomName("");
     setCode("");
     setError("");
+
+    clearSavedSession();
   }
 
   return (
     <div className="app">
       <header className="navbar">
-        <div className="brand" onClick={goHome}>
+        <div
+          className="brand"
+          onClick={goHome}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              goHome();
+            }
+          }}
+        >
           <Disc3 size={30} />
+
           <span>
-            groovio<span className="brand-dot">.</span>
+            groovio
+            <span className="brand-dot">.</span>
           </span>
         </div>
 
@@ -92,50 +196,31 @@ export default function App() {
       </header>
 
       <main className="content">
-        {room ? (
-          <section className="room-card">
-            <div className="eyebrow">
-              <span className="live-dot" />
-              ROOM CREATED / JOINED
-            </div>
+        {restoring ? (
+          <section
+            className="form-card"
+            style={{
+              textAlign: "center",
+              margin: "60px auto",
+            }}
+          >
+            <Disc3
+              size={42}
+              color="#d6fa72"
+              style={{
+                marginBottom: "15px",
+              }}
+            />
 
-            <h1>You're in.</h1>
-            <p className="muted">
-              Welcome to {room.name}, {name}.
-            </p>
+            <h2>Getting your groove back...</h2>
 
-            <div className="room-code-box">
-              <span>INVITE CODE</span>
-              <div className="code-row">
-                <strong>{room.code}</strong>
-                <button
-                  className="copy-btn"
-                  onClick={copyCode}
-                  title="Copy room code"
-                >
-                  {copied ? <Check /> : <Copy />}
-                </button>
-              </div>
-            </div>
-
-            <div className="member-box">
-              <Users size={20} />
-              <span>{room.members?.length || 1} member(s)</span>
-            </div>
-
-            <p className="room-note">
-              Your room is ready. The shared player, music queue, and chat are
-              the next features we'll connect here.
-            </p>
-
-            <button className="secondary-btn" onClick={goHome}>
-              <ArrowLeft size={18} />
-              Back to home
-            </button>
+            <p className="muted">Reconnecting to your listening room.</p>
           </section>
+        ) : room ? (
+          <RoomPage room={room} userName={name} onLeave={goHome} />
         ) : mode ? (
           <section className="form-card">
-            <button className="back-link" onClick={goHome}>
+            <button className="back-link" onClick={goHome} type="button">
               <ArrowLeft size={18} />
               Back
             </button>
@@ -153,8 +238,10 @@ export default function App() {
             </p>
 
             <form onSubmit={submitRoom}>
-              <label>Your name</label>
+              <label htmlFor="username">Your name</label>
+
               <input
+                id="username"
                 type="text"
                 placeholder="What should we call you?"
                 value={name}
@@ -165,8 +252,10 @@ export default function App() {
 
               {mode === "create" ? (
                 <>
-                  <label>Room name</label>
+                  <label htmlFor="roomname">Room name</label>
+
                   <input
+                    id="roomname"
                     type="text"
                     placeholder="e.g. Late Night Vibes"
                     value={roomName}
@@ -177,8 +266,10 @@ export default function App() {
                 </>
               ) : (
                 <>
-                  <label>Room code</label>
+                  <label htmlFor="roomcode">Room code</label>
+
                   <input
+                    id="roomcode"
                     type="text"
                     placeholder="e.g. 80C72C"
                     value={code}
@@ -201,6 +292,7 @@ export default function App() {
                   : mode === "create"
                     ? "Create Room"
                     : "Join Room"}
+
                 <ArrowRight size={19} />
               </button>
             </form>
@@ -254,11 +346,14 @@ export default function App() {
                   <div className="record-inner">
                     <div className="record-label">
                       <Disc3 size={52} />
+
                       <span>GROOVIO</span>
+
                       <small>SIDE A • 33 RPM</small>
                     </div>
                   </div>
                 </div>
+
                 <div className="floating-note">♫</div>
               </div>
             </section>
@@ -266,19 +361,25 @@ export default function App() {
             <section className="features">
               <div className="feature">
                 <Radio size={25} />
+
                 <h3>In sync, always.</h3>
+
                 <p>One room. One soundtrack. Together.</p>
               </div>
 
               <div className="feature">
                 <ListMusic size={25} />
+
                 <h3>Pass the aux.</h3>
+
                 <p>Build a shared queue with your crew.</p>
               </div>
 
               <div className="feature">
                 <MessageCircle size={25} />
+
                 <h3>Keep talking.</h3>
+
                 <p>Chat while the music plays.</p>
               </div>
             </section>
@@ -288,6 +389,7 @@ export default function App() {
 
       <footer>
         <span>© 2026 GROOVIO</span>
+
         <span>MADE FOR THE MOMENTS THAT MATTER ♫</span>
       </footer>
     </div>
