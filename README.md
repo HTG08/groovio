@@ -1,200 +1,231 @@
 # 🎧 Groovio
 
-**Good music hits different together.**
+**Your music. Together.**
 
-Groovio is a full-stack, real-time collaborative music room application built with **React, Node.js, Express, MongoDB, and Socket.IO**. Create a room, share its code with friends, search for YouTube videos, add tracks to a shared queue, and control playback together.
+[**Live App**](https://groovio-seven.vercel.app/) · [**Backend**](https://groovio-backend.onrender.com) · [**Source Code**](https://github.com/HTG08/groovio)
 
-> **Project status:** Functional development build. Some YouTube playback synchronization edge cases remain under investigation.
+Groovio is a full-stack collaborative music-room application built with the MERN stack and Socket.IO. Friends can join the same room, discover YouTube music, manage a shared queue, chat, and control playback together.
 
-## 📸 Screenshots
+> **Status:** Deployed and functional. Some YouTube seeking and replay synchronization edge cases are still being improved. The free Render backend may take time to wake up after inactivity.
 
-The screenshots below were captured during development and show the application at different stages. The interface may differ slightly from the latest code.
+## The Problem, Solution, and Users
+
+**Problem:** Friends listening remotely often have to coordinate songs, queues, and playback manually across separate devices. Sending links back and forth makes shared listening awkward.
+
+**Solution:** Groovio provides a single shared listening room with a room code, synchronized playback state, collaborative queue, real-time chat, and host-controlled permissions.
+
+**Target users:** Friends, remote groups, and music enthusiasts who want to listen together without creating traditional accounts.
+
+### Main User Workflows
+
+1. **Create a room:** Enter a display name and room name to generate a shareable six-character code.
+2. **Join a room:** Enter a room code and display name to join friends.
+3. **Find and queue music:** Search YouTube, add a video to the shared queue, or use **Play Next**.
+4. **Listen together:** Play, pause, select, and seek tracks; room playback updates are shared over Socket.IO.
+5. **Collaborate:** Chat with listeners and use **Host Only** to restrict or allow shared controls.
+
+## Screenshots
+
+Screenshots were taken during development; the latest interface may differ slightly.
 
 ### Landing page
-![Groovio landing page](screenshots/landing.png)
+![Landing page](screenshots/landing.png)
 
-### Join a listening room
-![Room join interface](screenshots/join-room.png)
+### Join a room
+![Join room](screenshots/join-room.png)
 
-### Early room and MP3 test-track prototype
-![Early room and queue](screenshots/room-and-test-tracks.png)
+### Early prototype with bundled test tracks
+![Prototype queue](screenshots/room-and-test-tracks.png)
 
 ### YouTube search and shared queue
-![YouTube search and queue](screenshots/youtube-search-and-queue.png)
+![YouTube search](screenshots/youtube-search-and-queue.png)
 
 ### Embedded YouTube player
 ![YouTube player](screenshots/youtube-player.png)
 
-### Listeners and room interface
-![Room listeners](screenshots/listeners-and-chat.png)
+### Listeners and chat
+![Listeners and chat](screenshots/listeners-and-chat.png)
 
-## ✨ Features
+## Features
 
-- **Room creation and joining:** Unique six-character room codes and host/member roles.
-- **Live room presence:** See listeners as they join and leave.
-- **YouTube search:** Search videos using the YouTube Data API v3; metadata is checked server-side before adding a video.
-- **Embedded playback:** Play videos using the YouTube IFrame Player API.
-- **Shared queue:** Add tracks, insert tracks with **Play Next**, and clear the queue.
-- **Host Only toggle:** The host can restrict playback and queue controls, or allow room members to collaborate.
-- **Real-time updates:** Socket.IO broadcasts queue, permission, and playback state changes.
-- **Room chat:** Chat with other listeners using a floating chat interface.
-- **Room authentication:** Room-specific JWTs verify members before protected actions.
+- Unique room codes, room membership, and host/member roles
+- YouTube search using the YouTube Data API v3 and playback through the YouTube IFrame Player API
+- Shared queue, **Play Next**, and queue clearing
+- Host Only permission toggle for playback and queue controls
+- Real-time chat, listener presence, queue updates, and playback events using Socket.IO
+- Room-specific JWT authorization for protected actions
+- MongoDB-backed rooms, queue, permissions, and playback state
+- Responsive web interface, with further mobile refinements planned
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-| Area | Technology |
+| Layer | Technologies |
 | --- | --- |
 | Frontend | React, Vite, JavaScript, CSS |
 | Backend | Node.js, Express.js |
 | Database | MongoDB Atlas, Mongoose |
 | Real-time communication | Socket.IO |
-| Authentication | JSON Web Tokens (JWT) |
-| Music integration | YouTube Data API v3, YouTube IFrame Player API |
-| Deployment plan | Vercel (frontend), Render (backend) |
+| Authorization | JSON Web Tokens (JWT) |
+| Music | YouTube Data API v3, YouTube IFrame Player API |
+| Hosting | Vercel (frontend), Render (backend) |
 
-## 🎵 About the Original Three Test Tracks
+## Architecture and Data Flow
 
-Before adding YouTube search, Groovio used **three bundled MP3 files** to test the music player and shared-queue workflow:
+```text
+Browser A (React)                     Browser B (React)
+      |                                     |
+      +--------- HTTPS / Socket.IO --------+
+                         |
+                 Express + Socket.IO
+                  /             \
+          MongoDB Atlas      YouTube Data API
+        (room and queue)    (search and metadata)
+                         |
+             YouTube IFrame Player
+             (embedded in each browser)
+```
 
-| Track ID | Display name | File |
-| --- | --- | --- |
-| `track1` | SoundHelix Song 1 | `client/public/music/track1.mp3` |
-| `track2` | SoundHelix Song 2 | `client/public/music/track2.mp3` |
-| `track3` | SoundHelix Song 3 | `client/public/music/track3.mp3` |
+**Example: Add a song to the queue**
 
-These sample tracks helped develop and test track selection, queue operations, and playback controls **before** the YouTube integration was implemented. They are intentionally still present in the project, and the backend continues to support `mp3` queue items alongside `youtube` items. They are development/demo assets, not the primary music catalog.
+1. A member searches YouTube from the React interface.
+2. The Express backend calls the YouTube Data API and validates video metadata.
+3. The member adds a selected video to the room queue through a protected REST endpoint.
+4. The backend verifies room membership and the room's Host Only setting, then updates MongoDB.
+5. Socket.IO broadcasts the updated queue to connected listeners.
+6. Playback commands update shared room state and are broadcast to other members.
 
-## 🐛 Bugs and Improvements Addressed During Development
+The backend remains responsible for permissions and shared state; the React interface is not trusted to enforce authorization by itself.
 
-| Issue | Change made |
-| --- | --- |
-| **Room control permissions were inconsistent** | Added backend permission checks for authenticated room members and the Host Only setting. |
-| **Members couldn't clear the queue even with Host Only OFF** | Updated the queue-deletion endpoint so members can clear the queue when collaboration is enabled; the host retains control when Host Only is ON. |
-| **Queue deletion left playback active** | Clearing the queue now resets the selected song, playback position, and playing state, then broadcasts queue and playback updates. |
-| **Song selection and Play could conflict** | Introduced an atomic `select-and-play` playback action to reduce select/play ordering races. |
-| **Play Next needed to respect the current song** | Added queue insertion immediately after the current playback item, with a fallback when nothing is selected. |
-| **Search results remained after clearing the query** | Updated the frontend search behavior to clear stale results when the search field is emptied. |
-| **Room layout and controls were cluttered** | Refined the search/queue layout, introduced floating chat, and simplified informational text in the room UI. |
+## Why Room-Based JWT Authentication?
 
-These describe implementation fixes made during development, not a claim that every edge case has been exhaustively tested.
+Groovio is designed for quick, temporary, code-based listening sessions, so users do not need to register permanent accounts. Creating or joining a room establishes a room-specific identity and JWT. Protected backend actions validate that identity and check host/member permissions. This is a deliberate product decision, not a traditional email/password authentication system.
 
-## ⚠️ Known Limitations
-
-- **Replay after a YouTube video ends:** Replaying a finished video can behave inconsistently because of end-position state handling.
-- **Cross-device YouTube seeking:** A seek made through one player's native controls may not always propagate correctly to another device.
-- **Autoplay and buffering:** Browser autoplay rules and network conditions can affect synchronization.
-- **In-memory chat:** If chat messages are only held in server memory, restarting the backend can clear the chat history.
-- **Free hosting:** A free backend service may sleep when idle, delaying the first connection.
-
-## 📁 Project Structure
+## Project Structure
 
 ```text
 groovio/
 ├── client/
-│   ├── public/
-│   │   └── music/                 # Three original MP3 demo tracks
+│   ├── public/music/       # Original MP3 test tracks
 │   ├── src/
-│   │   ├── components/            # Player, queue, chat, listeners
-│   │   ├── pages/                 # Room page
-│   │   └── services/              # Socket.IO client
+│   │   ├── components/     # Player and room UI
+│   │   ├── pages/          # Room screens
+│   │   └── services/       # Socket.IO client
 │   └── package.json
 ├── server/
-│   ├── controllers/              # Room and YouTube handlers
-│   ├── models/                   # MongoDB room schema
-│   ├── routes/                   # REST API routes
-│   ├── utils/                    # Room JWT helpers
-│   ├── index.js                  # Express and Socket.IO server
+│   ├── controllers/        # Room and YouTube logic
+│   ├── models/             # Mongoose room model
+│   ├── routes/             # REST endpoints
+│   ├── utils/              # JWT room helpers
+│   ├── index.js            # Express and Socket.IO
 │   └── package.json
-├── screenshots/                   # Development screenshots
-├── .gitignore
+├── screenshots/
 └── README.md
 ```
 
-## 🚀 Run Locally
+## Run Locally
 
-### Requirements
-
-- Node.js and npm
-- MongoDB Atlas connection string
-- YouTube Data API v3 key
-
-### 1. Clone the repository
+**Prerequisites:** Node.js, npm, MongoDB Atlas connection string, and a YouTube Data API v3 key.
 
 ```bash
 git clone https://github.com/HTG08/groovio.git
-cd groovio
-```
-
-### 2. Set up the backend
-
-```bash
-cd server
+cd groovio/server
 npm install
 ```
 
-Create `server/.env` and set the environment variables expected by your server:
+Create `server/.env`:
 
 ```env
 PORT=8888
 MONGO_URI=your_mongodb_connection_string
 JWT_SECRET=your_long_random_secret
-YOUTUBE_API_KEY=your_youtube_data_api_key
+YOUTUBE_API_KEY=your_youtube_api_key
 CLIENT_URL=http://localhost:5173
 ```
-
-> Check `server/index.js` and `server/utils/roomAuth.js` for the exact variable names used in your local version. Never commit the real `.env` file.
 
 Start the backend:
 
 ```bash
-node index.js
+npm start
 ```
 
-### 3. Set up the frontend
-
-In a second terminal:
+In another terminal:
 
 ```bash
-cd client
+cd groovio/client
 npm install
+```
+
+Create `client/.env`:
+
+```env
+VITE_SERVER_URL=http://localhost:8888
+```
+
+Then start Vite:
+
+```bash
 npm run dev
 ```
 
-Open the local URL printed by Vite (typically `http://localhost:5173`). If the client uses an environment variable for the backend URL, configure it to point to `http://localhost:8888` before starting Vite.
+Open the URL Vite prints, typically `http://localhost:5173`. If running commands from the repository root instead, use `cd client` to enter the frontend folder. **Never commit real `.env` files or API credentials.**
 
-## 🔌 REST API
+## REST API Overview
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/rooms/create` | Create a room |
-| `POST` | `/api/rooms/join` | Join a room |
-| `GET` | `/api/rooms/:code` | Get room information |
-| `GET` | `/api/rooms/youtube/search` | Search YouTube videos |
-| `POST` | `/api/rooms/:code/queue` | Add a track or Play Next |
-| `DELETE` | `/api/rooms/:code/queue` | Clear the queue |
+| `POST` | `/api/rooms/create` | Create a listening room |
+| `POST` | `/api/rooms/join` | Join by room code |
+| `GET` | `/api/rooms/:code` | Retrieve room state |
+| `GET` | `/api/rooms/youtube/search` | Search YouTube |
+| `POST` | `/api/rooms/:code/queue` | Add song / Play Next |
+| `DELETE` | `/api/rooms/:code/queue` | Clear queue |
 | `PATCH` | `/api/rooms/:code/permissions` | Update Host Only setting |
 
-## 🔐 Security and Permissions
+## Security and Validation
 
-- Room membership is verified with a JWT on protected queue and permission routes.
-- The backend enforces Host Only restrictions; hiding controls in the UI is not the only protection.
-- YouTube API keys and database credentials belong on the backend, not in frontend source code.
-- The YouTube integration uses the official embedded player rather than downloading audio.
+- Protected actions use room-specific JWT validation and backend permission checks.
+- The backend checks room membership and host-only restrictions before modifying shared state.
+- YouTube video IDs and metadata are validated server-side before queuing.
+- MongoDB connection strings, JWT secrets, and YouTube API credentials are stored in backend environment variables.
+- Playback uses YouTube's official embedded player, not audio downloading.
 
-## 🌐 Deployment
+**Security review item:** The room creation/join responses should be checked to ensure internal host/member identifiers are not unnecessarily exposed. This is an identified improvement, not a completed security guarantee.
 
-The project is structured for a **Vercel frontend**, **Render backend**, and **MongoDB Atlas database**. Configure the production frontend/backend URLs and CORS before testing rooms across devices.
+## Testing and Known Limitations
 
-- **GitHub:** https://github.com/HTG08/groovio
-- **Live demo:** Add your deployed Vercel URL here after deployment.
+**Observed working in deployment:** Room creation, real-time chat, YouTube music playback in host mode, and core room UI.
 
-## 🔭 Future Improvements
+**Remaining issues to address:**
 
-- Fix end-of-video replay and improve cross-device seek synchronization.
-- Persist chat history.
-- Improve reconnection handling and mobile responsiveness.
-- Add saved playlists and room management features.
+- Custom seek bar and YouTube's native seek bar can lag behind each other.
+- Seeking between listeners/devices may not synchronize consistently.
+- Replaying a video after it ends can be unreliable.
+- Chat's unread-count bubble may remain visible after messages have been viewed.
+- Chat history is held in server memory and can be lost when the backend restarts.
+- Free Render instances can spin down when idle, delaying the first connection.
+- Additional testing is needed for reconnection, mobile layouts, and network/API failures.
 
-## 👨‍💻 Author
+## Development Notes and Test Audio
 
-Built by [HTG08](https://github.com/HTG08) as a full-stack MERN and real-time communication project.
+Before YouTube integration, Groovio used three bundled sample MP3 files:
+
+| Track | Location |
+| --- | --- |
+| SoundHelix Song 1 | `client/public/music/track1.mp3` |
+| SoundHelix Song 2 | `client/public/music/track2.mp3` |
+| SoundHelix Song 3 | `client/public/music/track3.mp3` |
+
+These are development/demo assets, not Groovio's main music catalog. Verify the original source's license and attribution requirements before redistribution.
+
+During development, queue-clearing behavior, Host Only permissions, Play Next insertion, and the atomic `select-and-play` action were refined to improve consistency.
+
+## Future Improvements
+
+- Improve seeking and end-of-video synchronization
+- Persist chat history in MongoDB
+- Improve reconnection handling and mobile responsiveness
+- Add saved playlists and more room management options
+
+## Author
+
+Developed by [HTG08](https://github.com/HTG08) as a full-stack web development and real-time collaboration project.
