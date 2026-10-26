@@ -37,11 +37,11 @@ Screenshots were taken during development; the latest interface may differ sligh
 ### Early prototype with bundled test tracks
 ![Prototype queue](screenshots/room-and-test-tracks.png)
 
-### YouTube search and shared queue
-![YouTube search](screenshots/youtube-search-and-queue.png)
-
 ### Embedded YouTube player
 ![YouTube player](screenshots/youtube-player.png)
+
+### YouTube search and shared queue
+![YouTube search](screenshots/youtube-search-and-queue.png)
 
 ### Listeners and chat
 ![Listeners and chat](screenshots/listeners-and-chat.png)
