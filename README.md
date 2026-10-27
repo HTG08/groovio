@@ -189,8 +189,6 @@ Open the URL Vite prints, typically `http://localhost:5173`. If running commands
 - MongoDB connection strings, JWT secrets, and YouTube API credentials are stored in backend environment variables.
 - Playback uses YouTube's official embedded player, not audio downloading.
 
-**Security review item:** The room creation/join responses should be checked to ensure internal host/member identifiers are not unnecessarily exposed. This is an identified improvement, not a completed security guarantee.
-
 ## Testing and Known Limitations
 
 **Observed working in deployment:** Room creation, real-time chat, YouTube music playback in host mode, and core room UI.
@@ -198,9 +196,7 @@ Open the URL Vite prints, typically `http://localhost:5173`. If running commands
 **Remaining issues to address:**
 
 - Custom seek bar and YouTube's native seek bar can lag behind each other.
-- Seeking between listeners/devices may not synchronize consistently.
 - Replaying a video after it ends can be unreliable.
-- Chat's unread-count bubble may remain visible after messages have been viewed.
 - Chat history is held in server memory and can be lost when the backend restarts.
 - Free Render instances can spin down when idle, delaying the first connection.
 - Additional testing is needed for reconnection, mobile layouts, and network/API failures.
